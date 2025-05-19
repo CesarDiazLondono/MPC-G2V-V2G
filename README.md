@@ -1,5 +1,5 @@
 # MPC-G2V-V2G
-Open-source Model Predictive Control implementations. [text](https://arxiv.org/abs/2405.11963)
+Open-source Model Predictive Control implementations. [Paper Link](https://arxiv.org/abs/2405.11963)
 
 ## Installation
 
