@@ -1,5 +1,5 @@
 # MPC-G2V-V2G
-Open-source MPC implementation for EV V2G smart charging for the [EVs-Simulator](https://github.com/StavrosOrf/EVsSimulator) from paper " ... ".
+Open-source Model Predictive Control implementations. [text](https://arxiv.org/abs/2405.11963)
 
 ## Installation
 
