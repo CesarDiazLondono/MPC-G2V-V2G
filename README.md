@@ -3,24 +3,24 @@ Open-source MPC implementation for EV V2G smart charging for the [EVs-Simulator]
 
 ## Installation
 
-Make sure you installed the [EVs-Simulator](https://github.com/StavrosOrf/EVsSimulator) first.
+Make sure you installed the [EV2Gym](https://github.com/StavrosOrf/ev2gym) first.
 
 ```bash
-pip install EVsSimulator
+pip install ev2gym
 ```
 
 Run a simple example with MPC:
 ```python
 
-from EVsSimulator.ev_city import EVsSimulator
-from occf_mpc import OCCF_V2G, OCCF_G2V
+from ev2gym.models.ev2gym_env import EV2Gym
+from occf_mpc import OCMF_V2G, OCMF_V2G
 from eMPC import eMPC_V2G, eMPC_G2V
 
 # path to the configuration file
 config_file = "V2G_MPC.yaml"
 
 # create the simulator environment
-env = EVsSimulator(config_file=config_file,
+env = EV2Gym(config_file=config_file,
                     verbose=True,
                     save_replay=True,                       
                     save_plots=True,
@@ -47,12 +47,14 @@ print(stats)
 If you use this code in your research, please cite the following paper:
 
 ```bibtex
-@article{,
-  title={},
-  author={},
-  journal={},
-  year={},
-  publisher={}
+@misc{diazlondono2024simulationtoolv2genabled,
+      title={A Simulation Tool for V2G Enabled Demand Response Based on Model Predictive Control}, 
+      author={Cesar Diaz-Londono and Stavros Orfanoudakis and Pedro P. Vergara and Peter Palensky and Fredy Ruiz and Giambattista Gruosso},
+      year={2024},
+      eprint={2405.11963},
+      archivePrefix={arXiv},
+      primaryClass={eess.SY},
+      url={https://arxiv.org/abs/2405.11963}, 
 }
 ```
 

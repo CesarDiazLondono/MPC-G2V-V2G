@@ -5,18 +5,20 @@ Authors: Cesar Diaz-Londono, Stavros Orfanoudakis
 """
 
 import numpy as np
+import matplotlib.pyplot as plt
 
 from abc import ABC, abstractmethod
 
 
 class MPC(ABC):
 
-    def __init__(self, env,
+    def __init__(self,
+                 env,
                  control_horizon=25,
-                 verbose=True,
-                 time_limit = 200,
-                 output_flag = 0,
-                 MIPGap = None,
+                 verbose=False,
+                 time_limit=0,
+                 output_flag=0,
+                 MIPGap=None,
                  **kwargs):
         """
         Initialize the MPC baseline.
@@ -37,6 +39,7 @@ class MPC(ABC):
         self.simulation_length = env.simulation_length  # Simulation length in steps
         self.t_min = env.timescale  # Time scale in minutes
         self.control_horizon = control_horizon  # prediction horizon in steps
+        self.total_exec_time = 0
 
         self.output_flag = output_flag
         self.time_limit = time_limit
@@ -88,6 +91,11 @@ class MPC(ABC):
         # Matrix with minimum powers
         self.p_min_MT = np.zeros(
             (self.n_ports, self.simulation_length + self.control_horizon + 1))
+        
+        # the charger each EV is connected to
+        self.ev_locations = np.zeros(self.EV_number, dtype=int)
+        # The maximum battery capacity of each EV
+        self.ev_max_batt = np.zeros(self.EV_number, dtype=int)
 
         self.max_ch_power = np.zeros(self.n_ports)
         self.max_disch_power = np.zeros(self.n_ports)
@@ -96,13 +104,20 @@ class MPC(ABC):
             self.max_ch_power[i] = cs.get_max_power()
             self.max_disch_power[i] = cs.get_min_power()
 
-        # EVs Scheduling and specs based on the EVsSimulator environment
+        # EVs Scheduling and specs based on the ev2gym environment
         for index, EV in enumerate(env.EVs_profiles):
 
             if index == 0:
-                # Assume all EVs have the same charging and discharging efficiency !!!
-                self.ch_eff = EV.charge_efficiency
-                self.disch_eff = EV.discharge_efficiency
+                # Assume all EVs have the same charging and discharging efficiency !!!                
+                if isinstance(EV.charge_efficiency, dict):
+                    # get the highest value of the dictionary
+                    key = max(EV.charge_efficiency, key=EV.charge_efficiency.get)                    
+                    self.ch_eff = EV.charge_efficiency[key]
+                    self.disch_eff = EV.discharge_efficiency[key]                    
+                else:
+                    self.ch_eff = EV.charge_efficiency
+                    self.disch_eff = EV.discharge_efficiency                
+                
                 self.min_SoC = EV.min_battery_capacity/EV.battery_capacity
 
             # Assume all EVs have the same characteristics !!!
@@ -116,6 +131,10 @@ class MPC(ABC):
                 self.departure_times[index] = EV.time_of_departure + 1
 
             ev_location = EV.location
+
+            self.ev_locations[index] = ev_location
+            self.ev_max_batt[index] = EV.battery_capacity
+            
             self.u[ev_location, self.arrival_times[index]:
                    self.departure_times[index]] = 1
             self.x_init[ev_location, self.arrival_times[index]:
@@ -194,6 +213,17 @@ class MPC(ABC):
             print(f'Prices: {self.ch_prices}')
             print(f' Discharge Prices: {self.disch_prices}')
 
+        # parameters for the MPC v2 model
+
+        self.varch2 = 0
+
+        self.d_cycHist_e2 = []
+        self.d_calHist_e2 = []
+        
+        self.Xhist_e2 = np.zeros((self.n_ports, self.simulation_length))
+        self.Uhist_e2 = np.zeros((self.n_ports, self.simulation_length))
+        self.Uhist_e2V = np.zeros((self.n_ports, self.simulation_length))
+
     @abstractmethod
     def get_action(self, env):
         pass
@@ -232,7 +262,7 @@ class MPC(ABC):
             self.tr_power_limit[i, :] = tr.max_power
             self.tr_pv[i, :] = tr.solar_power
             self.tr_loads[i, :] = tr.inflexible_load
-            
+
     def reconstruct_state(self, t):
         '''
         This function reconstructs the state of the environment using the historical data.
@@ -413,6 +443,7 @@ class MPC(ABC):
         print(f'Final SoC: {self.Cxf}')
         print(f'Arrival times: {self.arrival_times}')
         print(f'Departure times: {self.departure_times}')
-        
+        print(f'P_max_MT: {self.p_max_MT}')
+
         # print(f'x_init: {self.x_init}')
-        # print(f'Desired Final: {self.x_final}')
+        print(f'Desired Final: {self.x_final}')

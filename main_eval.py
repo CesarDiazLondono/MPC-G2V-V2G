@@ -1,30 +1,25 @@
 """
 This script is used to evaluate the performance of the EVsSimulator environment.
 """
-from EVsSimulator.ev_city import EVsSimulator
-from EVsSimulator.baselines.gurobi_models.tracking_error import PowerTrackingErrorrMin
-from EVsSimulator.baselines.gurobi_models.profit_max import V2GProfitMaxOracleGB
-from occf_mpc import OCCF_V2G, OCCF_G2V
+from ev2gym.models.ev2gym_env import EV2Gym
+from ocmf_mpc import OCMF_V2G, OCMF_G2V
 from eMPC import eMPC_V2G, eMPC_G2V
 
-from EVsSimulator.baselines.heuristics import RoundRobin, ChargeAsLateAsPossible, ChargeAsFastAsPossible
-from EVsSimulator.baselines.heuristics import ChargeAsFastAsPossibleToDesiredCapacity
 
 import numpy as np
 import matplotlib.pyplot as plt
 
 def eval():
     """
-    Runs an evaluation of the EVsSimulator environment.
+    Runs an evaluation of the EV2Gym environment.
     """
     save_plots = True
     
-    replay_path = "./replay/replay_sim_2024_02_21_056441.pkl"
     replay_path = None
 
     config_file = "V2G_MPC.yaml"
 
-    env = EVsSimulator(config_file=config_file,
+    env = EV2Gym(config_file=config_file,
                        load_from_replay_path=replay_path,
                        verbose=True,
                        save_replay=True,                       
@@ -45,14 +40,10 @@ def eval():
     print(f'Max time of stay: {max_time_of_stay}')
     print(f'Min time of stay: {min_time_of_stay}')
     
-    # agent = OCCF_V2G(env, control_horizon=25, verbose=False)
-    # agent = OCCF_G2V(env, control_horizon=25, verbose=False)
+    # agent = OCMF_V2G(env, control_horizon=25, verbose=False)
+    # agent = OCMF_G2V(env, control_horizon=25, verbose=False)
     # agent = eMPC_V2G(env, control_horizon=25, verbose=False)
-    # agent = V2GProfitMaxOracle(env,verbose=False)
     agent = eMPC_G2V(env, control_horizon=25, verbose=False)
-    # agent = ChargeAsLateAsPossible(verbose=False)
-    # agent = ChargeAsFastAsPossible()
-    # agent = ChargeAsFastAsPossibleToDesiredCapacity()    
 
     for t in range(env.simulation_length):        
         actions = agent.get_action(env)

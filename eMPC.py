@@ -1,5 +1,5 @@
 '''
-This file contains the eMPC class, which is used to control the EVsSimulator environment using the eMPC algorithm.
+This file contains the eMPC class, which is used to control the ev2gym environment using the eMPC algorithm.
 
 Authors: Cesar Diaz-Londono, Stavros Orfanoudakis
 '''
@@ -10,7 +10,7 @@ from gurobipy import GRB
 from gurobipy import *
 import numpy as np
 
-from mpc import MPC
+from ev2gym.baselines.mpc.mpc import MPC
 
 
 class eMPC_V2G(MPC):
@@ -33,148 +33,183 @@ class eMPC_V2G(MPC):
         """
         This function computes the MPC actions for the economic problem including V2G.
         """
-        t = env.current_step
-        # update transformer limits
-        self.update_tr_power(t)
 
-        # reconstruct self.x_next using the environment
-        self.reconstruct_state(t)
-        self.calculate_XF_V2G(t)
+        # keep looping until feasible solution is found
+        while True:
 
-        # Station models: Amono and Bmono
-        self.v2g_station_models(t)
+            t = env.current_step
+            # update transformer limits
+            self.update_tr_power(t)
 
-        # Complete model calculation Gu, and inequality constraints Au and bu
-        self.calculate_InequalityConstraints(t)
+            # reconstruct self.x_next using the environment
+            self.reconstruct_state(t)
+            self.calculate_XF_V2G(t)
 
-        # Set power limits
-        self.set_power_limits_V2G(t)
+            # Station models: Amono and Bmono
+            self.v2g_station_models(t)
 
-        # Print information if verbose
-        if self.verbose:
-            self.print_info(t)
+            # Complete model calculation Gu, and inequality constraints Au and bu
+            self.calculate_InequalityConstraints(t)
 
-        # Generate the min cost function
-        f = []
+            # Set power limits
+            self.set_power_limits_V2G(t)
 
-        for i in range(self.control_horizon):
-            for j in range(self.n_ports):
-                f.append(self.T * self.ch_prices[t + i])
-                f.append(-self.T * self.disch_prices[t + i])
+            # Print information if verbose
+            if self.verbose:
+                self.print_info(t)
 
-        f = np.array(f).reshape(-1, 1)
+            # Generate the min cost function
+            f = []
 
-        nb = self.nb
-        n = self.n_ports
-        h = self.control_horizon
-
-        model = gp.Model("optimization_model")
-        u = model.addVars(range(nb*h),
-                          vtype=GRB.CONTINUOUS,
-                          name="u")  # Power
-
-        # Binary for charging or discharging
-        Zbin = model.addVars(range(n*h),
-                             vtype=GRB.BINARY,
-                             name="Zbin")
-
-        # Constraints
-        model.addConstrs((gp.quicksum(self.AU[i, j] * u[j]
-                                      for j in range(nb*h))
-                          <= self.bU[i]
-                          for i in range(nb*h)), name="constr1")  # Constraint with prediction model
-
-        # Constraints for charging P
-        model.addConstrs((0 <= u[j]
-                          for j in range(0, nb*h, 2)), name="constr3a")
-
-        model.addConstrs((u[j] <= self.UB[j] * Zbin[j//2]
-                          for j in range(0, nb*h, 2)), name="constr3b")
-
-        # Constraints for discharging P
-        model.addConstrs((0 <= u[j]
-                          for j in range(1, nb*h, 2)),
-                         name="constr4a")
-
-        model.addConstrs((u[j] <= self.UB[j]*(1-Zbin[j//2])
-                          for j in range(1, nb*h, 2)),
-                         name="constr4b")
-
-        # Add the transformer constraints
-        for tr_index in range(self.number_of_transformers):
             for i in range(self.control_horizon):
-                model.addConstr((gp.quicksum((u[j] - u[j+1])
-                                             for index, j in enumerate(
-                                                 range(i*self.nb, (i+1)*self.nb, 2))
-                                             if self.cs_transformers[index] == tr_index) +
-                                 self.tr_loads[tr_index, i] +
-                                 self.tr_pv[tr_index, i] <=
-                                 self.tr_power_limit[tr_index, i]),
-                                name=f'constr5_{tr_index}_t{i}')
-                
-        for tr_index in range(self.number_of_transformers):
-            for i in range(self.control_horizon):
-                model.addConstr((gp.quicksum((u[j] - u[j+1])
-                                             for index, j in enumerate(
-                                                 range(i*self.nb, (i+1)*self.nb, 2))
-                                             if self.cs_transformers[index] == tr_index) +
-                                 self.tr_loads[tr_index, i] +
-                                 self.tr_pv[tr_index, i] >=
-                                 -self.tr_power_limit[tr_index, :].max()),
-                                name=f'constr5_{tr_index}_t{i}')
+                for j in range(self.n_ports):
+                    f.append(self.T * self.ch_prices[t + i])
+                    f.append(-self.T * self.disch_prices[t + i])
 
-        obj_expr = gp.LinExpr()
-        for i in range(nb*h):
-            obj_expr.addTerms(f[i], u[i])
+            f = np.array(f).reshape(-1)
 
-        model.setObjective(obj_expr, GRB.MINIMIZE)
-        model.setParam('OutputFlag', self.output_flag)
-        model.params.NonConvex = 2        
-        
-        if self.MIPGap is not None:
-            model.params.MIPGap = self.MIPGap
-        model.params.TimeLimit = self.time_limit        
-        model.optimize()
+            nb = self.nb
+            n = self.n_ports
+            h = self.control_horizon
 
-        if self.MIPGap is not None:
-            model.params.MIPGap = self.MIPGap
-        model.params.TimeLimit = self.time_limit        
-        model.optimize()
+            model = gp.Model("optimization_model")
+            u = model.addMVar(nb*h,
+                              vtype=GRB.CONTINUOUS,
+                              name="u")  # Power
 
-        if model.status != GRB.Status.OPTIMAL:            
-            print(f"Optimal solution not found - step{t} !!!")            
+            # Binary for charging or discharging
+            Zbin = model.addMVar(n*h,
+                                 vtype=GRB.BINARY,
+                                 name="Zbin")
             
-        if model.status == GRB.Status.INF_OR_UNBD or \
-                model.status == GRB.Status.INFEASIBLE:                  
-            print(f"INFEASIBLE (applying default actions) - step{t} !!!")                          
-            actions = np.ones(self.n_ports) * 0.25
+            # Predicted SoC, SOC average, d_cyc, d_cal
+            SoC = model.addMVar(n * h, vtype=GRB.CONTINUOUS, name="SoC")
+            SOCav = model.addMVar(self.EV_number, vtype=GRB.CONTINUOUS, name="SOCav")
+            d_cyc = model.addMVar(self.EV_number, vtype=GRB.CONTINUOUS, name="d_cyc")
+            d_cal = model.addMVar(self.EV_number, vtype=GRB.CONTINUOUS, name="d_cal")
+
+
+            # Constraints
+            model.addConstr((self.AU @ u) <= self.bU, name="constr1")
+
+            # Constraints for charging P
+            model.addConstrs((0 <= u[j]
+                              for j in range(0, nb*h, 2)), name="constr3a")
+
+            model.addConstrs((u[j] <= self.UB[j] * Zbin[j//2]
+                              for j in range(0, nb*h, 2)), name="constr3b")
+
+            # Constraints for discharging P
+            model.addConstrs((0 <= u[j]
+                              for j in range(1, nb*h, 2)),
+                             name="constr4a")
+
+            model.addConstrs((u[j] <= self.UB[j]*(1-Zbin[j//2])
+                              for j in range(1, nb*h, 2)),
+                             name="constr4b")
+
+            # Add the transformer constraints
+            for tr_index in range(self.number_of_transformers):
+                for i in range(self.control_horizon):
+                    model.addConstr((gp.quicksum((u[j] - u[j+1])
+                                                 for index, j in enumerate(
+                        range(i*self.nb, (i+1)*self.nb, 2))
+                        if self.cs_transformers[index] == tr_index) +
+                        self.tr_loads[tr_index, i] +
+                        self.tr_pv[tr_index, i] <=
+                        self.tr_power_limit[tr_index, i]),
+                        name=f'constr5_{tr_index}_t{i}')
+
+            for tr_index in range(self.number_of_transformers):
+                for i in range(self.control_horizon):
+                    model.addConstr((gp.quicksum((u[j] - u[j+1])
+                                                 for index, j in enumerate(
+                        range(i*self.nb, (i+1)*self.nb, 2))
+                        if self.cs_transformers[index] == tr_index) +
+                        self.tr_loads[tr_index, i] +
+                        self.tr_pv[tr_index, i] >=
+                        -self.tr_power_limit[tr_index, :].max()),
+                        name=f'constr5_{tr_index}_t{i}')
+
+            model.setObjective(f @ u, GRB.MINIMIZE)
+            model.setParam('OutputFlag', self.output_flag)
+            # model.params.NonConvex = 2
+
+            if self.MIPGap is not None:
+                model.params.MIPGap = self.MIPGap
+
+            model.params.TimeLimit = self.time_limit
+
+            model.optimize()
+
+            self.total_exec_time += model.Runtime
+
+            if model.status == GRB.Status.INF_OR_UNBD or \
+                    model.status == GRB.Status.INFEASIBLE:
+                print(
+                    f"INFEASIBLE or Unbounded - step{t} -- Relaxing SoC constraints - try {self.varch2}")
+                # input("Press Enter to continue...")
+                flagOut = False  # Initialize flagOut to False
+                varch = 0
+
+                # Iterate over each EV
+                for i in range(n):
+                    for j in range(t, t + h + 1):
+                        # Detect if an EV is departing inside t+h
+                        if self.x_final[i, j] == 0 and self.x_final[i, j - 1] > 0:
+                            if self.verbose:
+                                print(
+                                    f"EV {i} is departing at {j} with {self.x_final[i, j - 1]}")
+                                print(f'XFinal: {self.x_final[i, j]} ')
+                                print(f'XNext: {self.x_next[i]}')
+                                print(
+                                    f'Diff: {self.x_final[i, j - 1] - self.p_max_MT[i, j - 1] * self.T}')
+
+                        if self.x_final[i, j] == 0 and self.x_final[i, j - 1] > 0 and self.x_next[i] > 0:
+
+                            # self.x_next[i] < (self.x_final[i, j - 1] - self.p_max_MT[i, j - 1] * self.T) and
+
+                            varch += 1
+                            if varch > self.varch2:
+                                # Reduce the departure SoC by the maximum power it can deliver at T
+                                self.x_final[i, j - 1] = self.x_final[i,
+                                                                      j - 1] - self.p_max_MT[i, j - 1] * self.T
+                                self.varch2 += 1
+                                flagOut = True
+                                break
+                    if flagOut:
+                        break
+                    if i == n - 1:
+                        self.varch2 = 0
+
+                continue
+
+            # calculating actions
+            a = np.zeros((nb*h, 1))
+
+            for i in range(2*self.n_ports):
+                a[i] = u[i].x
+
+            # build normalized actions
+            actions = np.zeros(self.n_ports)
+            if self.verbose:
+                print(f'Actions:\n {a.reshape(-1,self.n_ports, 2)}')
+
+            e = 0.001
+            for i in range(0, 2*self.n_ports, 2):
+                if a[i] > e and a[i + 1] > e:
+                    raise ValueError(f'Charging and discharging at the same time\
+                                        {i} {a[i]} {a[i+1]}')
+                elif a[i] > e:
+                    actions[i//2] = a[i]/self.max_ch_power[i//2]
+                elif a[i + 1] > e:
+                    actions[i//2] = -a[i+1]/abs(self.max_disch_power[i//2])
+
+            if self.verbose:
+                print(f'actions: {actions.shape} \n {actions}')
+
+            # input("Press Enter to continue...")
             return actions
-
-        a = np.zeros((nb*h, 1))
-
-        for i in range(2*self.n_ports):
-            a[i] = u[i].x
-
-        # build normalized actions
-        actions = np.zeros(self.n_ports)
-        if self.verbose:
-            print(f'Actions:\n {a.reshape(-1,self.n_ports, 2)}')
-            
-        e = 0.001
-        for i in range(0, 2*self.n_ports, 2):
-            if a[i] > e and a[i + 1] > e:
-                raise ValueError(f'Charging and discharging at the same time\
-                                    {i} {a[i]} {a[i+1]}')
-            elif a[i] > e:
-                actions[i//2] = a[i]/self.max_ch_power[i//2]
-            elif a[i + 1] > e:
-                actions[i//2] = -a[i+1]/abs(self.max_disch_power[i//2])
-
-        if self.verbose:
-            print(f'actions: {actions.shape} \n {actions}')
-
-        # input("Press Enter to continue...")
-        return actions
 
 
 class eMPC_G2V(MPC):
@@ -227,32 +262,27 @@ class eMPC_G2V(MPC):
             for j in range(self.n_ports):
                 f.append(self.T * self.ch_prices[t + i])
 
-        f = np.array(f).reshape(-1, 1)
+        f = np.array(f).reshape(-1)
 
         nb = self.nb
         n = self.n_ports
         h = self.control_horizon
 
         model = gp.Model("optimization_model")
-        u = model.addVars(range(nb*h),
+        u = model.addMVar(nb*h,
                           vtype=GRB.CONTINUOUS,
                           name="u")  # Power
 
         # Constraints
-        model.addConstrs((gp.quicksum(self.AU[i, j] * u[j]
-                                      for j in range(nb*h))
-                          <= self.bU[i]
-                          for i in range(2 * n *h)), name="constr1")
+        model.addConstr((self.AU @ u) <= self.bU, name="constr1")
 
-        # Constraints for charging P
-        model.addConstrs((0 <= u[j]
-                          for j in range(nb*h)), name="constr3a")
+        # Add the lower bound constraints
+        model.addConstr((0 <= u), name="constr2a")
 
-        # Constraints for charging P
-        model.addConstrs((u[j] <= self.UB[j]
-                          for j in range(nb*h)), name="constr3b")
+        # Add the upper bound constraints
+        model.addConstr((u <= self.UB), name="constr2b")
 
-# Add the transformer constraints
+        # Add the transformer constraints
         for tr_index in range(self.number_of_transformers):
             for i in range(self.control_horizon):
                 model.addConstr((gp.quicksum(u[j]
@@ -263,7 +293,7 @@ class eMPC_G2V(MPC):
                                  self.tr_pv[tr_index, i] <=
                                  self.tr_power_limit[tr_index, i]),
                                 name=f'constr5_{tr_index}_t{i}')
-    
+
         for tr_index in range(self.number_of_transformers):
             for i in range(self.control_horizon):
                 model.addConstr((gp.quicksum(u[j]
@@ -274,27 +304,21 @@ class eMPC_G2V(MPC):
                                  self.tr_pv[tr_index, i] >=
                                  -self.tr_power_limit[tr_index, :].max()),
                                 name=f'constr5_{tr_index}_t{i}')
-                
-        obj_expr = gp.LinExpr()
-        for i in range(nb*h):
-            obj_expr.addTerms(f[i], u[i])
 
-        model.setObjective(obj_expr, GRB.MINIMIZE)
+        model.setObjective(f @ u, GRB.MINIMIZE)
         model.setParam('OutputFlag', self.output_flag)
         model.params.NonConvex = 2
-        
+
         if self.MIPGap is not None:
             model.params.MIPGap = self.MIPGap
-        model.params.TimeLimit = self.time_limit        
+        model.params.TimeLimit = self.time_limit
         model.optimize()
+        self.total_exec_time += model.Runtime
 
-        if model.status != GRB.Status.OPTIMAL:            
-            print(f"Optimal solution not found - step{t} !!!")            
-            
         if model.status == GRB.Status.INF_OR_UNBD or \
-                model.status == GRB.Status.INFEASIBLE:                  
-            print(f"INFEASIBLE (applying default actions) - step{t} !!!")                          
-            actions = np.ones(self.n_ports) * 0.25
+                model.status == GRB.Status.INFEASIBLE:
+            print(f"INFEASIBLE (applying default actions) - step{t} !!!")
+            actions = np.ones(self.n_ports) * 0  # 0.25
             return actions
 
         a = np.zeros((nb*h, 1))
