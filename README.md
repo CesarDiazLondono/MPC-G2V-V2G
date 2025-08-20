@@ -1,5 +1,5 @@
 # MPC-G2V-V2G
-Open-source Model Predictive Control implementations. [Paper Link](https://arxiv.org/abs/2405.11963)
+Open-source Model Predictive Control implementations. [Open access paper Link](https://www.sciencedirect.com/science/article/pii/S0378779625006704)
 
 ## Installation
 
@@ -47,14 +47,17 @@ print(stats)
 If you use this code in your research, please cite the following paper:
 
 ```bibtex
-@misc{diazlondono2024simulationtoolv2genabled,
-      title={A Simulation Tool for V2G Enabled Demand Response Based on Model Predictive Control}, 
-      author={Cesar Diaz-Londono and Stavros Orfanoudakis and Pedro P. Vergara and Peter Palensky and Fredy Ruiz and Giambattista Gruosso},
-      year={2024},
-      eprint={2405.11963},
-      archivePrefix={arXiv},
-      primaryClass={eess.SY},
-      url={https://arxiv.org/abs/2405.11963}, 
+@article{DIAZLONDONO2026MPC,
+title = {Open source algorithms for maximizing V2G flexibility based on model predictive control},
+journal = {Electric Power Systems Research},
+volume = {250},
+pages = {112082},
+year = {2026},
+issn = {0378-7796},
+doi = {https://doi.org/10.1016/j.epsr.2025.112082},
+url = {https://www.sciencedirect.com/science/article/pii/S0378779625006704},
+author = {Cesar Diaz-Londono and Stavros Orfanoudakis and Pedro P. Vergara and Peter Palensky and Fredy Ruiz and Giambattista Gruosso},
+keywords = {Electric vehicles (EVs), Smart charging, Battery degradation, Vehicle-to-Grid (V2G), Model predictive control (MPC)}
 }
 ```
 
