@@ -1,0 +1,37 @@
+timescale: 15
+simulation_length: 96     # 24h
+year: 2022
+month: 1
+day: 17
+random_day: False
+hour: 0
+minute: 0
+simulation_days: weekdays
+
+discharge_price_factor: 1.1   # 论文图4(a)描述“放电价略高”，用 1.1 就行
+
+# 下面内容对“价格曲线”不敏感，但保留最小化设置避免报错
+v2g_enabled: True
+number_of_charging_stations: 30
+number_of_transformers: 1
+number_of_ports_per_cs: 1
+charging_network_topology: None
+
+inflexible_loads: { include: True, inflexible_loads_capacity_multiplier_mean: 1.0, forecast_mean: 100, forecast_std: 5 }
+solar_power:       { include: True, solar_power_capacity_multiplier_mean: 1.0, forecast_mean: 100, forecast_std: 5 }
+demand_response:   { include: True, events_per_day: 1, event_capacity_percentage_mean: 35, event_capacity_percentage_std: 5,
+                     event_length_minutes_min: 60, event_length_minutes_max: 60, event_start_hour_mean: 18, event_start_hour_std: 1,
+                     notification_of_event_minutes: 60 }
+
+network_info:
+  include: true
+  s_base: 100
+  grid_voltage_base: 400
+  grid_frequency: 50
+  grid_type: LV
+  pf_solver: "PandaPower"
+  vm_pu: 1.0
+  load_multiplier: 1.0
+  pv_scale: 1.0
+  bus_info_file:    "E:/code/EV2gym/ev2gym/data/network_data/node_25/Nodes_25.csv"
+  branch_info_file: "E:/code/EV2gym/ev2gym/data/network_data/node_25/Lines_25.csv"

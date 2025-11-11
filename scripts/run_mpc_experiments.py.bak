@@ -1,0 +1,29 @@
+﻿import os
+from EV2Gym.ev2gym_env import EV2Gym
+from eMPC import eMPC_V2G
+from ocmf_mpc import OCMF_V2G
+
+# === Step 1: 璁剧疆鐜 ===
+config_file = "config.yaml"
+env = EV2Gym(config_file)
+
+# === Step 2: 瀹氫箟绠楁硶 ===
+algorithms = {
+    "eMPC_V2G": eMPC_V2G(env, control_horizon=40),  # 棰勬祴鏃跺煙 H=10灏忔椂
+    "OCMF_V2G": OCMF_V2G(env, control_horizon=40)
+}
+
+# === Step 3: 杩愯姣忎釜绠楁硶 ===
+results_dir = "results"
+os.makedirs(results_dir, exist_ok=True)
+
+for name, agent in algorithms.items():
+    print(f"\n=== Running {name} ===")
+    env.reset()
+    for k in range(env.K):
+        action = agent.get_action(env.state)
+        env.step(action)
+    # 淇濆瓨浠跨湡鏁版嵁
+    env.save_results(os.path.join(results_dir, f"{name}.csv"))
+    print(f"鉁?{name} finished and results saved.")
+

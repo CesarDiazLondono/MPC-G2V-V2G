@@ -1,11 +1,40 @@
 # This yml file is used to configure the evsim simulation
+# This yml file is used to configure the evsim simulation
+
+simulate_grid: true
+pf_solver: PandaPower   # 或 Laurent，二选一
+network_info:
+  include: true
+  s_base: 100
+  # 节点/线路文件
+  bus_info_file: "E:/code/EV2gym/ev2gym/data/network_data/node_25/Nodes_25.csv"
+  line_info_file: "E:/code/EV2gym/ev2gym/data/network_data/node_25/Lines_25.csv"     # 兼容旧键
+  branch_info_file: "E:/code/EV2gym/ev2gym/data/network_data/node_25/Lines_25.csv"   # PandaPower 分支需要这个键
+  transformer_info_file: null
+
+
+  # 基本电参与潮流控制
+  grid_voltage_base: 400
+  load_multiplier: 1.0
+  pv_scale: 100
+  power_factor: 0.95
+  grid_frequency: 50
+  grid_type: LV
+  load_flow_max_iter: 100
+  load_flow_tolerance: 1e-5
+
+  # PandaPower 需要的电压/载荷约束
+  vm_pu: 1.0
+  min_vm_pu: 0.95
+  max_vm_pu: 1.05
+  max_line_loading_percent: 100
 
 ##############################################################################
 # Simulation Parameters
 ##############################################################################
 timescale: 15 # in minutes per step
 simulation_length: 112 #90 # in steps per simulation
-
+bus_info_file: null
 ##############################################################################
 # Date and Time
 ##############################################################################
@@ -49,8 +78,8 @@ charging_network_topology: None #./config_files/charging_topology_10.json
 ##############################################################################
 # How much the power setpoints can vary in percentage compared to the nominal power
 # The higher the number the easier it is to meet the power setpoints, the opposite for negative numbers
+power_setpoint_enabled: false     # 先关闭功率跟踪，绕过加载逻辑
 power_setpoint_flexiblity: 10 # (in percentage +/- %)
-
 ##############################################################################
 # Inflexible Loads, Solar Generation, and Demand Response
 ##############################################################################

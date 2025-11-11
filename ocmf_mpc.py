@@ -144,24 +144,33 @@ class OCMF_V2G(MPC):
         model.optimize()
         self.total_exec_time += model.Runtime
 
-        if self.MIPGap is not None:
-            model.params.MIPGap = self.MIPGap
-        model.params.TimeLimit = self.time_limit        
-        model.optimize()
-   
-            
-        if model.status == GRB.Status.INF_OR_UNBD or \
-                model.status == GRB.Status.INFEASIBLE:                  
-            print(f"INFEASIBLE (applying default actions) - step{t} !!!")                          
-            actions = np.ones(self.n_ports) * 0 # 0.25
+        # Handle infeasibility or no-solution cases more robustly
+        if model.status in (GRB.Status.INF_OR_UNBD, GRB.Status.INFEASIBLE):
+            print(f"INFEASIBLE (applying default actions) - step{t} !!!")
+            actions = np.ones(self.n_ports) * 0
+            return actions
+        # If Gurobi stopped early (e.g., TIME_LIMIT) without a feasible solution,
+        # SolCount will be 0 and accessing u[i].x raises an error. Guard it.
+        try:
+            solcount = int(model.SolCount)
+        except Exception:
+            solcount = 0
+        if solcount == 0:
+            print(f"No feasible solution available (status={model.status}); default actions at step {t}")
+            actions = np.ones(self.n_ports) * 0
             return actions
 
         a = np.zeros((nb*h, 1))
         cap = np.zeros((nb*h, 1))
         z_bin = np.zeros((n*h, 1))
 
-        for i in range(nb*h):
-            a[i] = u[i].x
+        # Prefer vector read; fallback to per-index
+        try:
+            arr = np.asarray(u.X).reshape(-1)
+            a[:len(arr), 0] = arr
+        except Exception:
+            for i in range(nb*h):
+                a[i] = u[i].x
             # cap[i] = CapF1[i].x
 
         # build normalized actions
